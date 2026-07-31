@@ -5,8 +5,12 @@ allowBuilds:
   prisma: true
   sharp: true
   unrs-resolver: true
+auditConfig:
+  ignoreGhsas:
+    # ESLint's current minimatch 3 dependency cannot consume brace-expansion 5.
+    # It only processes repository-controlled lint globs, not user input.
+    - GHSA-mh99-v99m-4gvg
 overrides:
-  brace-expansion: 5.0.9
   effect: 3.22.1
   postcss: 8.5.25
   sharp: 0.35.3
