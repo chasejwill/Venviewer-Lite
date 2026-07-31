@@ -1,9 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CSRF_COOKIE, newCsrfToken } from "@/lib/auth";
+import {
+  CSRF_COOKIE,
+  newCsrfToken,
+  SESSION_COOKIE,
+  verifySession,
+} from "@/lib/auth";
+import { getEnv } from "@/lib/env";
+
+function applyResponseSecurity(
+  response: NextResponse,
+  {
+    csp,
+    isEmbed,
+    existingCsrfToken,
+    csrfToken,
+  }: {
+    csp: string;
+    isEmbed: boolean;
+    existingCsrfToken: string | undefined;
+    csrfToken: string;
+  },
+): NextResponse {
+  response.headers.set("Content-Security-Policy", csp);
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()",
+  );
+  if (!isEmbed) response.headers.set("X-Frame-Options", "DENY");
+
+  if (!existingCsrfToken) {
+    response.cookies.set(CSRF_COOKIE, csrfToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+    });
+  }
+  return response;
+}
 
 export function proxy(request: NextRequest) {
-  const existingToken = request.cookies.get(CSRF_COOKIE)?.value;
-  const csrfToken = existingToken ?? newCsrfToken();
+  const existingCsrfToken = request.cookies.get(CSRF_COOKIE)?.value;
+  const csrfToken = existingCsrfToken ?? newCsrfToken();
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-csrf-token", csrfToken);
 
@@ -26,26 +66,28 @@ export function proxy(request: NextRequest) {
 
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("content-security-policy", csp);
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
-
-  response.headers.set("Content-Security-Policy", csp);
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set(
-    "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=()",
-  );
-  if (!isEmbed) response.headers.set("X-Frame-Options", "DENY");
-
-  if (!existingToken) {
-    response.cookies.set(CSRF_COOKIE, csrfToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-    });
+  const isProtectedAdminPath =
+    (request.nextUrl.pathname === "/admin" ||
+      request.nextUrl.pathname.startsWith("/admin/")) &&
+    request.nextUrl.pathname !== "/admin/login";
+  if (isProtectedAdminPath) {
+    const env = getEnv();
+    const session = verifySession(
+      request.cookies.get(SESSION_COOKIE)?.value,
+      env.VENVIEWER_LITE_SESSION_SECRET,
+    );
+    if (!session) {
+      return applyResponseSecurity(
+        NextResponse.redirect(new URL("/admin/login", request.url)),
+        { csp, isEmbed, existingCsrfToken, csrfToken },
+      );
+    }
   }
-  return response;
+
+  return applyResponseSecurity(
+    NextResponse.next({ request: { headers: requestHeaders } }),
+    { csp, isEmbed, existingCsrfToken, csrfToken },
+  );
 }
 
 export const config = {

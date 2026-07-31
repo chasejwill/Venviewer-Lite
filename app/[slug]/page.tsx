@@ -12,7 +12,8 @@ async function findTour(slug: string) {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const tour = await findTour((await params).slug);
-  return { title: tour?.title ?? "Tour not found" };
+  if (!tour) notFound();
+  return { title: tour.title };
 }
 
 export default async function PublicTourPage({ params }: Props) {

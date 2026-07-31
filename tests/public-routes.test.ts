@@ -10,8 +10,12 @@ const { findUnique, notFound } = vi.hoisted(() => ({
 vi.mock("@/lib/db", () => ({ db: { tour: { findUnique } } }));
 vi.mock("next/navigation", () => ({ notFound }));
 
-import PublicTourPage from "@/app/[slug]/page";
-import EmbedTourPage from "@/app/embed/[slug]/page";
+import PublicTourPage, {
+  generateMetadata as generatePublicMetadata,
+} from "@/app/[slug]/page";
+import EmbedTourPage, {
+  generateMetadata as generateEmbedMetadata,
+} from "@/app/embed/[slug]/page";
 
 const tour = {
   title: "Falls",
@@ -51,6 +55,34 @@ describe("public and embed routes", () => {
     ).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFound).toHaveBeenCalled();
   });
+
+  it.each([
+    ["public", generatePublicMetadata],
+    ["embed", generateEmbedMetadata],
+  ])(
+    "resolves unknown %s metadata through notFound before rendering",
+    async (_name, metadata) => {
+      findUnique.mockResolvedValue(null);
+      await expect(
+        metadata({ params: Promise.resolve({ slug: "missing" }) }),
+      ).rejects.toThrow("NEXT_NOT_FOUND");
+      expect(notFound).toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ["public", generatePublicMetadata],
+    ["embed", generateEmbedMetadata],
+  ])(
+    "preserves metadata for an unpublished %s tour",
+    async (_name, metadata) => {
+      findUnique.mockResolvedValue({ ...tour, published: false });
+      await expect(
+        metadata({ params: Promise.resolve({ slug: "draft" }) }),
+      ).resolves.toEqual({ title: "Falls" });
+      expect(notFound).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     ["public", PublicTourPage],

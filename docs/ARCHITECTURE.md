@@ -20,8 +20,9 @@ session records are stored. PostgreSQL is the default production provider in
 
 ## Request boundaries
 
-`proxy.ts` gives each browser a CSRF token and adds CSP and security headers.
-Actions verify the token, configured-base-URL origin, and administrator session.
-Sessions are signed, expiring, HttpOnly cookies. Public and embed lookups always
-return a clear inaccessible state for drafts and call Next.js `notFound` for
-unknown slugs.
+`proxy.ts` gives each browser a CSRF token, adds security headers, and redirects
+unauthenticated admin document requests before rendering. Pages and actions
+still verify authorization; actions also verify the token and configured-base-
+URL origin. Sessions are signed, expiring, HttpOnly cookies. Public and embed
+metadata resolve unknown tours through Next.js `notFound` before document
+streaming; drafts return a clear inaccessible state.

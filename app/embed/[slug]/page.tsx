@@ -1,16 +1,23 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { TourViewer } from "@/components/TourViewer";
 import { db } from "@/lib/db";
 import { kuulaEmbedUrl } from "@/lib/tours";
 
-export default async function EmbedTourPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
-  const tour = await db.tour.findUnique({
-    where: { slug: (await params).slug },
-  });
+type Props = { params: Promise<{ slug: string }> };
+
+async function findTour(slug: string) {
+  return db.tour.findUnique({ where: { slug } });
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const tour = await findTour((await params).slug);
+  if (!tour) notFound();
+  return { title: tour.title };
+}
+
+export default async function EmbedTourPage({ params }: Props) {
+  const tour = await findTour((await params).slug);
   if (!tour) notFound();
   if (!tour.published) {
     return (
