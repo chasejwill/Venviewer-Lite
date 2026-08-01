@@ -16,6 +16,10 @@
   security headers disable MIME sniffing and sensitive browser capabilities.
 - All ordinary pages deny framing. `/embed/[slug]` deliberately allows framing
   from any site; drafts show an inaccessible state without a Kuula iframe.
+- The Kuula iframe is borderless and fully visible. Venviewer Lite does not use
+  masks, clipping, blur, overlays, or URL rewriting to conceal Kuula branding
+  or controls. Configure those through official Kuula export/share settings and
+  store the resulting validated URL.
 
 Use HTTPS, rotate credentials when exposure is suspected, patch dependencies,
 and restrict access to deployment secrets and database backups. There is no

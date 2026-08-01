@@ -9,7 +9,6 @@ export function TourViewer({ src, title }: { src: string; title: string }) {
     <div className="viewer-container">
       {!loaded ? (
         <div className="viewer-loading" role="status" aria-live="polite">
-          <span className="viewer-brand">Venview</span>
           <span>Loading virtual tour…</span>
         </div>
       ) : null}
@@ -18,7 +17,7 @@ export function TourViewer({ src, title }: { src: string; title: string }) {
         src={src}
         title={title}
         width="100%"
-        height="640"
+        height="100%"
         allow="fullscreen; xr-spatial-tracking"
         allowFullScreen
         loading="lazy"

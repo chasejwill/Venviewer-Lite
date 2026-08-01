@@ -31,6 +31,22 @@ describe("admin proxy authorization", () => {
     expect(response.headers.get("x-middleware-next")).toBe("1");
   });
 
+  it("denies framing for public tours", () => {
+    const response = proxy(request("/falls"));
+    expect(response.headers.get("x-frame-options")).toBe("DENY");
+    expect(response.headers.get("content-security-policy")).toContain(
+      "frame-ancestors 'none'",
+    );
+  });
+
+  it("preserves frame-compatible headers only for embed tours", () => {
+    const response = proxy(request("/embed/falls"));
+    expect(response.headers.has("x-frame-options")).toBe(false);
+    expect(response.headers.get("content-security-policy")).toContain(
+      "frame-ancestors *",
+    );
+  });
+
   it("redirects a protected admin path when the cookie is missing", () => {
     const response = proxy(request("/admin/tours"));
     expect(response.status).toBe(307);

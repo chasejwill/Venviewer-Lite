@@ -9,6 +9,12 @@ Set `VENVIEWER_LITE_DEPLOY_ENV=production`,
 email, bcrypt password hash, and random session secret. Startup rejects missing,
 malformed, or documented placeholder values.
 
+Public tour canonical metadata is generated from
+`VENVIEWER_LITE_BASE_URL`, so update it whenever the production origin changes.
+Configure branding and player controls with official Kuula export/share
+settings before saving each tour URL; Venviewer Lite does not conceal
+Kuula-owned UI.
+
 ## PostgreSQL migrations
 
 The default `prisma/schema.prisma` and `prisma/migrations` tree are PostgreSQL,
