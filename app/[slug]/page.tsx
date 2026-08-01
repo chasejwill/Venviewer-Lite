@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { TourViewer } from "@/components/TourViewer";
 import { db } from "@/lib/db";
+import { getEnv } from "@/lib/env";
 import { kuulaEmbedUrl } from "@/lib/tours";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -11,9 +12,21 @@ async function findTour(slug: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const tour = await findTour((await params).slug);
+  const { slug } = await params;
+  const tour = await findTour(slug);
   if (!tour) notFound();
-  return { title: tour.title };
+  const description = tour.published
+    ? `Explore ${tour.title} in an interactive virtual tour.`
+    : "This virtual tour is not currently available.";
+
+  return {
+    title: tour.title,
+    description,
+    alternates: {
+      canonical: new URL(`/${slug}`, getEnv().VENVIEWER_LITE_BASE_URL),
+    },
+    robots: tour.published ? undefined : { index: false, follow: false },
+  };
 }
 
 export default async function PublicTourPage({ params }: Props) {
@@ -21,18 +34,22 @@ export default async function PublicTourPage({ params }: Props) {
   if (!tour) notFound();
   if (!tour.published) {
     return (
-      <main className="shell">
-        <div className="card">
+      <main className="public-tour-page">
+        <header className="public-title-header">
           <h1>{tour.title}</h1>
-          <p>This tour is unpublished and currently inaccessible.</p>
-        </div>
+        </header>
+        <section className="public-unavailable" aria-labelledby="tour-status">
+          <p id="tour-status">This tour is not currently available.</p>
+        </section>
       </main>
     );
   }
 
   return (
-    <main className="viewer-page">
-      <h1 className="viewer-title">{tour.title}</h1>
+    <main className="public-tour-page">
+      <header className="public-title-header">
+        <h1>{tour.title}</h1>
+      </header>
       <TourViewer src={kuulaEmbedUrl(tour.kuulaUrl)} title={tour.title} />
     </main>
   );

@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resetEnvCacheForTests } from "@/lib/env";
 
 const { findUnique, notFound } = vi.hoisted(() => ({
   findUnique: vi.fn(),
@@ -18,32 +22,62 @@ import EmbedTourPage, {
 } from "@/app/embed/[slug]/page";
 
 const tour = {
-  title: "Falls",
+  title:
+    "Falls of the Ohio State Park and Interpretive Center Virtual Tour Experience",
   slug: "falls",
-  kuulaUrl: "https://kuula.co/share/abc",
+  kuulaUrl: "https://kuula.co/share/abc?mode=1&foo=two",
   published: true,
 };
+
+function markup(node: Awaited<ReturnType<typeof PublicTourPage>>) {
+  return renderToStaticMarkup(createElement(() => node));
+}
 
 describe("public and embed routes", () => {
   beforeEach(() => {
     findUnique.mockReset();
     notFound.mockClear();
+    process.env.DATABASE_URL =
+      "postgresql://user:pass@localhost:5432/venviewer";
+    process.env.VENVIEWER_LITE_BASE_URL = "https://viewer.example";
+    process.env.VENVIEWER_LITE_ADMIN_EMAIL = "admin@viewer.example";
+    process.env.VENVIEWER_LITE_ADMIN_PASSWORD_HASH =
+      "$2b$04$pJN3Lr.cBFuTYl9hzXlCYunQ3PTa56wUMMAq8b5Im8qaYe2PW1O3i";
+    process.env.VENVIEWER_LITE_SESSION_SECRET =
+      "route-test-session-secret-at-least-32-characters";
+    process.env.VENVIEWER_LITE_DEPLOY_ENV = "test";
+    resetEnvCacheForTests();
   });
 
-  it.each([
-    ["public", PublicTourPage],
-    ["embed", EmbedTourPage],
-  ])(
-    "renders the tour viewer for a published tour on the %s route",
-    async (_name, Page) => {
-      findUnique.mockResolvedValue(tour);
-      const result = await Page({ params: Promise.resolve({ slug: "falls" }) });
-      expect(findUnique).toHaveBeenCalledWith({
-        where: { slug: "falls" },
-      });
-      expect(JSON.stringify(result)).toContain("https://kuula.co/share/abc");
-    },
-  );
+  it("renders exactly one centered public title header and the Kuula viewer", async () => {
+    findUnique.mockResolvedValue(tour);
+    const result = await PublicTourPage({
+      params: Promise.resolve({ slug: "falls" }),
+    });
+    const html = markup(result);
+
+    expect(findUnique).toHaveBeenCalledWith({ where: { slug: "falls" } });
+    expect(html.match(/<h1(?:\s|>)/g)).toHaveLength(1);
+    expect(html).toContain('class="public-title-header"');
+    expect(html).toContain(tour.title);
+    expect(html).toContain("https://kuula.co/share/abc?mode=1&amp;foo=two");
+    expect(html).toContain('allow="fullscreen; xr-spatial-tracking"');
+    expect(html).not.toContain("viewer-title");
+    expect(html).not.toContain("card");
+  });
+
+  it("keeps the embed route minimal and free of the public header", async () => {
+    findUnique.mockResolvedValue(tour);
+    const result = await EmbedTourPage({
+      params: Promise.resolve({ slug: "falls" }),
+    });
+    const html = renderToStaticMarkup(createElement(() => result));
+
+    expect(html).toContain('class="embed-page"');
+    expect(html).toContain("https://kuula.co/share/abc?mode=1&amp;foo=two");
+    expect(html).not.toContain("<h1");
+    expect(html).not.toContain("public-title-header");
+  });
 
   it.each([
     ["public", PublicTourPage],
@@ -79,23 +113,67 @@ describe("public and embed routes", () => {
       findUnique.mockResolvedValue({ ...tour, published: false });
       await expect(
         metadata({ params: Promise.resolve({ slug: "draft" }) }),
-      ).resolves.toEqual({ title: "Falls" });
+      ).resolves.toMatchObject({ title: tour.title });
       expect(notFound).not.toHaveBeenCalled();
     },
   );
 
-  it.each([
-    ["public", PublicTourPage],
-    ["embed", EmbedTourPage],
-  ])(
-    "renders an inaccessible state without an iframe for a draft %s tour",
-    async (_name, Page) => {
-      findUnique.mockResolvedValue({ ...tour, published: false });
-      const result = await Page({ params: Promise.resolve({ slug: "draft" }) });
-      const rendered = JSON.stringify(result);
-      expect(rendered).toContain("unpublished");
-      expect(rendered).not.toContain("https://kuula.co/share/abc");
-      expect(notFound).not.toHaveBeenCalled();
-    },
-  );
+  it("adds canonical public metadata and a useful published description", async () => {
+    findUnique.mockResolvedValue(tour);
+    await expect(
+      generatePublicMetadata({
+        params: Promise.resolve({ slug: "falls" }),
+      }),
+    ).resolves.toEqual({
+      title: tour.title,
+      description: `Explore ${tour.title} in an interactive virtual tour.`,
+      alternates: { canonical: new URL("https://viewer.example/falls") },
+      robots: undefined,
+    });
+  });
+
+  it("renders the public draft with its title header, no fake player, and noindex metadata", async () => {
+    findUnique.mockResolvedValue({ ...tour, published: false });
+    const result = await PublicTourPage({
+      params: Promise.resolve({ slug: "draft" }),
+    });
+    const html = markup(result);
+
+    expect(html.match(/<h1(?:\s|>)/g)).toHaveLength(1);
+    expect(html).toContain('class="public-title-header"');
+    expect(html).toContain("This tour is not currently available.");
+    expect(html).not.toContain("<iframe");
+    await expect(
+      generatePublicMetadata({
+        params: Promise.resolve({ slug: "draft" }),
+      }),
+    ).resolves.toMatchObject({
+      alternates: { canonical: new URL("https://viewer.example/draft") },
+      robots: { index: false, follow: false },
+    });
+  });
+
+  it("renders an embed draft without an iframe or public presentation", async () => {
+    findUnique.mockResolvedValue({ ...tour, published: false });
+    const result = await EmbedTourPage({
+      params: Promise.resolve({ slug: "draft" }),
+    });
+    const html = renderToStaticMarkup(createElement(() => result));
+    expect(html).toContain("unpublished");
+    expect(html).not.toContain("<iframe");
+    expect(html).not.toContain("public-title-header");
+  });
+
+  it("defines the gradient, viewport layout, long-title wrapping, and no concealment effects", () => {
+    const css = readFileSync("app/globals.css", "utf8");
+    expect(css).toContain("--venview-racing-yellow: #ffd400");
+    expect(css).toContain("--venview-deep-sunset-orange: #e85d04");
+    expect(css).toMatch(
+      /linear-gradient\(\s*135deg,\s*var\(--venview-racing-yellow\),\s*var\(--venview-deep-sunset-orange\)\s*\)/,
+    );
+    expect(css).toContain("grid-template-rows: auto minmax(0, 1fr)");
+    expect(css).toContain("height: 100dvh");
+    expect(css).toContain("overflow-wrap: anywhere");
+    expect(css).not.toMatch(/\b(?:mask|clip-path|filter|backdrop-filter)\s*:/);
+  });
 });

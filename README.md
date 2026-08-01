@@ -1,8 +1,13 @@
 # Venviewer Lite
 
 Venviewer Lite is a small, self-hosted manager and public viewer for Kuula
-virtual tours. Version 1.0.0 provides one environment-configured administrator,
+virtual tours. Version 1.0.1 provides one environment-configured administrator,
 draft/published tours, direct public links, and embeddable viewers.
+
+The public route presents a Venviewer title header above the cross-origin Kuula
+viewer; the embed route contains only the viewer. Kuula branding and in-player
+UI must be configured with official Kuula export/share settings and saved in
+the tour's stored URL. Venviewer Lite does not conceal or remove Kuula-owned UI.
 
 ## Quick start
 
